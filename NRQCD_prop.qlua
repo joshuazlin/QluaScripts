@@ -1,0 +1,40 @@
+
+--Given a 
+-- L: a Lattice. Assumes its x,y,z,t ordered. 
+-- U: Gauge configuration on the lattice
+-- M: Mass of heavy quark scale. 
+-- {x0,y0,z0,t0}: Source
+-- following https://journals.aps.org/prd/pdf/10.1103/PhysRevD.43.196
+-- equation (23)
+
+function NRQCD_prop(L,U,M,x0)
+  --Get a blank propagator
+  local P = L:DiracPropagator()
+
+  --Now, lets set the source
+  local Nc = P:colors()
+  for ic = 0, Nc - 1 do
+    for is = 0, qcd.Ns - 1 do
+      local dv = L:DiracFermion()
+      dv[{x0[1],x0[2],x0[3],x0[4],c=ic,d=is}] = complex(1,0)
+      P[{c=ic,d=is}] = dv
+    end
+  end
+  
+  --create an evolution operator(?)
+  local function evolve(P)
+    --P is supposed to be subsetted
+    --I'm worried that it uses space... 
+    --print("does this work?", U[4])
+    P:set((U[4]:adjoin()*qcd.laplacian(1,1/(2*M),U,P,3)):shift(3,"to_forward"))
+  end
+
+  --Now, its time to propagate. 
+  for it=1,L[3]-1 do
+    --print("doing",it)
+    --print(L:Subset{axis=3,position=(x0[4]+it)%L[3]})
+    L:Subset{axis=3,position=(x0[4]+it)%L[3]}:where(evolve,P)
+  end
+
+  return P
+end 

@@ -1,0 +1,68 @@
+
+package.path = '/home/joshlin/qlua_modules/?.qlua;' .. package.path
+require "static_prop"
+require "hadrons"
+require "show"
+
+function random_state(L,j)
+  local x = L:Int(0)
+  for i=0,#L-1 do
+    x = x * L[i] + L:pcoord(i)
+  end
+  return L:RandomState(j,x)
+end
+
+L = qcd.lattice{5,5,5,8}
+U = {}
+seeds = {123,357,234,128}
+for i=1,#L do
+  U[i] = random_state(L,seeds[i]):gaussian_ColorMatrix():proj(1e-6,150)
+end
+
+--function get_props(L,U)
+  --Solve for the prop for the random gauge fields
+  --local CL = qcd.Clover(U,0.071,1.0,{1,1,1,-1})
+  --local solve = CL:solver(1e-8,10000)
+  --local src = L:DiracPropagator()
+  --local Nc = src:colors()
+  --for ic = 0,Nc-1 do
+  --  for is = 0,qcd.Ns - 1 do
+  --    local dv = L:DiracFermion()
+  --    dv[{0,0,0,0,c=ic,d=is}] = complex(1,0)
+  --    src[{c=ic,d=is}] = dv
+  --  end
+  --end
+  --local u = solve(src)
+  --CL:close()
+
+--Get the props
+u = random_state(L,387):gaussian_DiracPropagator()
+b = static_prop(L,U,{0,0,0,0},4)
+
+--props = get_props(L,U)
+qq = lambdab(u,u,b)--props[1],props[1],props[2])
+pt2 = twopoint_proj(L,qq,{0,0,0})
+twopoint_write("test_outputs/test_static_prop.txt",pt2,{0,0,0,0},L,4)
+
+--Now, I will try a random gauge transformation 
+seed = 847
+gauge = random_state(L,seed):gaussian_ColorMatrix():proj(1e-6,150)
+for i=1,#L do
+  U[i] = gauge * U[i] * gauge:shift(i-1,"from_forward"):adjoin()
+end
+
+u = L:ColorMatrix(gauge[{0,0,0,0}]) * u * gauge:adjoin()
+--b = L:ColorMatrix(gauge[{0,0,0,0}]) * b * gauge:adjoin()
+b = static_prop(L,U,{0,0,0,0},4)
+--props = get_props(L,U)
+qq = lambdab(u,u,b)--props[1],props[1],props[2])
+pt2_2 = twopoint_proj(L,qq,{0,0,0})
+file = io.open("test_outputs/test_static_prop_diff.txt","w")
+for i=0,#pt2-1 do
+  x = pt2[i] - pt2_2[i]
+  file:write(x:real().." "..x:imag().."\n")
+end
+file:close()
+
+
+

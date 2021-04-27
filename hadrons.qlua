@@ -1,0 +1,43 @@
+
+
+function mesons(d,u)
+  local a_prop = gamma{mu=5} * d * gamma{mu=5}
+  local qq = {}
+  for i=0, qcd.Ns*qcd.Ns - 1 do
+    qq[i+1] = qcd.dot(a_prop, gamma{n=i} * u * gamma{n=i}) 
+  end
+  return qq
+end
+
+function lambdab(d, u, b)
+  local S =  gamma{mu=0} * gamma{mu=2} --C gamma_5
+  local T =  (1 + gamma{mu=3}) / 2 --P+
+  local a2 = T * b
+  local a3 = qcd.quarkContract13(d * S, S * u)
+  return (a2:spintrace() * a3:spintrace()):trace() --This is a complex field now
+end
+
+--p3 is momenta
+--assumes L is {space*3,time}
+function twopoint_proj(L,qq,p3)
+  local px = 2*math.pi*p3[1]/L[0]
+  local py = 2*math.pi*p3[2]/L[1]
+  local pz = 2*math.pi*p3[3]/L[2]
+  local w = (L:Real(L:pcoord(0)) * px +
+             L:Real(L:pcoord(1)) * py + 
+             L:Real(L:pcoord(2)) * pz):expi()
+  local pt2 = (qq * w):sum(L:MultiSet(L[3],L:pcoord(3)))
+  return pt2
+end
+
+function twopoint_write(filename, pt2,source,L,index_time)
+  local file = io.open(filename, "w")
+  for nt=0,L[index_time-1]-1 do
+    --print("writing")
+    local z = (source[index_time] + nt)%L[index_time-1]
+    file:write(pt2[z]:real().." "..pt2[z]:imag().."\n")
+  end 
+  file:close()
+end
+
+

@@ -1,0 +1,96 @@
+
+require "stdlib"
+require "show"
+require "mytable"
+
+
+-- Takes in gauge, and source position
+-- x0= {x0,y0,z0,t0}
+-- time_axis is 1-indexed
+function static_prop_doesntwork(L,U,x0,time_axis)
+  --Seems like this is a bad idea, how to proj the fermion?
+  print("Calculating static prop, with lattice ",L)
+
+  --First, initialize the propagator
+  local prop = L:DiracPropagator()
+  for ic=0,2 do
+    for id=0,qcd.Ns-1 do
+      local F = L:DiracFermion()
+      F[merge(x0,{c=ic,d=id})] = complex(1,0) --wonky merge mate
+      prop[{c=ic,d=id}] = F
+    end
+  end
+
+  --Then, propagate
+  for nt=1,L[time_axis-1]-1 do 
+    print("nt",nt)
+    --For some reason, I can only do :set on the DiracFermion fields? 
+    for ic = 0,2 do
+      for id = 0,2 do 
+        local F = L:DiracFermion(prop[{c=ic,d=id}])
+        local G = L:DiracFermion((U[time_axis]:transpose()*F):shift(time_axis-1,"from_backward"))
+        --transpose
+        L:Subset{axis=time_axis-1,position=(x0[time_axis]+nt)%L[time_axis-1]}:where(function()
+          --I have absolutely no idea why this commented below code doesn't work?
+          --No idea why I need to make G outside
+          --F:set(L:DiracFermion((U[time_axis]:transpose()*F):shift(time_axis-1,"from_backward")))
+          F:set(G)
+        end)
+        prop[{c=ic,d=id}] = F 
+      end
+    end
+  end
+
+  return prop--*(1+gamma{mu=3})/2
+end
+
+function static_prop(L,U,x0,time_axis)
+
+  local x = shallowcopy(x0)
+  local V = {U[time_axis][x]}
+  for nt=2,L[time_axis-1]-1 do
+    --print("path",nt)
+    x[time_axis] = (x[time_axis] + 1)%L[time_axis-1]
+    V[nt] = (V[nt-1]*U[time_axis][x]):proj(1e-6,150)
+  end
+
+  local prop = L:DiracPropagator()
+  for c=0,2 do
+    for d=0,3 do
+      local F = L:DiracFermion()
+      F[merge(x0,{c=c,d=d})] = complex(1,0)
+      for c2=0,2 do
+        x = shallowcopy(x0) 
+        for nt=1,L[time_axis-1]-1 do
+          x[time_axis] = (x[time_axis]+1)%L[time_axis-1]
+          --original:
+          --F[merge(x,{c=c2,d=d})] = V[nt][{a=c,b=c2}]
+          F[merge(x,{c=c2,d=d})] = V[nt][{a=c2,b=c}] --This is the one, checked by test
+        end
+      end
+      prop[{c=c,d=d}] = F
+    end
+  end
+  
+  return prop*(1+gamma{mu=3})/2
+  --return prop*(1-gamma{mu=3})/2
+end
+
+
+  --  print("nt",nt) 
+  --  L:Subset{axis=time_axis-1,position=(x0[time_axis]+nt)%L[time_axis-1]}:where(function()
+  --    prop:set((prop*U[time_axis]):shift(time_axis-1,"from_backward"))
+  --  end)
+  --end
+
+  --point = table.clone(x0)
+    --newpoint = table.clone(point)
+    --newpoint[time_axis] = (point[time_axis] + 1)%L[time_axis-1]
+    --for c=0,2 do
+    --  for d=0,qcd.Ns-1 do
+    --    prop[{c=c,d=d}][newpoint] = U[time_axis][point]*prop[{c=c,d=d}][point]
+    --  end
+    --end
+    --point = newpoint
+
+

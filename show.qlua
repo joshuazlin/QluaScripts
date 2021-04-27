@@ -1,0 +1,35 @@
+
+
+--Given a lattice L, and an integer field I
+--print out the integer field, over the dims requested
+function show_int2(L,I)
+  --assert(type(L) == lattice,"need a lattice mate")
+  for i=0,L[0]-1 do
+    to_print=''
+    for j=0,L[1]-1 do
+      to_print = to_print..I[{i,j}]
+      to_print = to_print..' '
+    end
+    print(to_print)
+  end 
+end
+
+function show_fermion(f)
+  for c=0,2 do
+    top = ""
+    for d=0,3 do
+      top = top .. tostring(f[{c=c,d=d}])
+    end
+    print(top)
+  end
+end
+
+function show_colormat(U)
+  for a=0,2 do
+    top = ""
+    for b=0,2 do
+      top = top .. tostring(U[{a=a,b=b}])
+    end
+    print(top)
+  end 
+end
