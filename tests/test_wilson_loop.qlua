@@ -1,6 +1,6 @@
 
 package.path = '/home/joshlin/qlua_modules/?.qlua;' .. package.path
-require "planar_wilson"
+require "wilson_loop"
 require "show"
 
 function random_state(L,j)
@@ -22,7 +22,8 @@ end
 print("Initial")
 show_colormat(U[1][{1,1,1,1}])
 
-planar_wilson(L,U,1,4,5,10,"test_outputs/test_planar_wilson_1.txt")
+planar_wilson(L,U,4,5,10,"test_outputs/test_planar_wilson_1.txt")
+nonplanar_wilson(L,U,4,5,10,"test_outputs/test_nonplanar_wilson_1.txt")
 
 --check that the colormatrix hasn't been touched
 print("Final")
@@ -34,7 +35,8 @@ gauge = random_state(L,seed):gaussian_ColorMatrix():proj(1e-6,150)
 for i=1,#L do
   U[i] = gauge * U[i] * gauge:shift(i-1,"from_forward"):adjoin()
 end
-planar_wilson(L,U,1,4,5,10,"test_outputs/test_planar_wilson_2.txt")
 
+planar_wilson(L,U,4,5,10,"test_outputs/test_planar_wilson_2.txt")
+nonplanar_wilson(L,U,4,5,10,"test_outputs/test_nonplanar_wilson_2.txt")
 
 

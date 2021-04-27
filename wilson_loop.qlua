@@ -1,0 +1,192 @@
+require "show"
+
+-- Planar_wilson takes in
+--            L : A lattice
+--           U4 : A gauge field
+--  index_space : A choice of an axis   (1-indexed)
+--   index_time : A choice of time_axis (1-indexed)
+--           nx : A choice of how far to go in the x direction
+--           nt : A choice of how far to go in the t direction 
+--         file : where to write the results
+
+function planar_wilson(L,U4,index_time,nx,nt,filename)
+
+  --Open file to write to
+  local file = io.open(filename,"w")
+
+  --Then, make copies
+  local xi = {} -- Holds the indices that are spatial
+  local Us = {} -- Holds the copies that get shifted
+  local Um = {} -- Holds the copies that get multiplied
+  for i=1,#L do
+    if i ~= index_time then
+      xi[#xi+1] = i
+    end 
+    Us[i] = L:ColorMatrix(U4[i])
+    Um[i] = L:ColorMatrix(U4[i])
+  end
+
+  for nx=1,nx do
+    --print("Calculating nx="..nx)
+
+    --Reset the time gauge
+    Us[index_time] = L:ColorMatrix(U4[index_time])
+    Um[index_time] = L:ColorMatrix(U4[index_time])
+    for nt=1,nt do
+      --print("Calculating nt="..nt)
+     
+      --Loop over the spatial indices 
+      local ans = {}
+      for i=1,#L do
+        if i ~= index_time then
+          --Get the things we need to shift
+          local Ux_s = L:ColorMatrix(Um[i])
+          local Ut_s = L:ColorMatrix(Um[index_time])
+          for it=1,nt do
+            Ux_s = Ux_s:shift(index_time-1,"from_forward")
+          end
+          for ix=1,nx do
+            Ut_s = Ut_s:shift(i-1,"from_forward")
+          end
+          ans[i] = (Um[i] * 
+                    Ut_s *
+                    Ux_s:adjoin() * 
+                    Um[index_time]:adjoin()):trace():sum()/L:volume()
+        end
+      end
+      local ans_total = complex(0,0)
+      for i=1,#L do
+        if i ~= index_time then
+          ans_total = ans_total + ans[i]
+        end
+      end
+      file:write("nx "..nx.." nt "..nt.." avg "..ans_total:real()/#xi.." "..ans_total:imag()/#xi.."\n")
+      Us[index_time] = Us[index_time]:shift(index_time-1,"from_forward")
+      Um[index_time] = Um[index_time] * Us[index_time]
+      Um[index_time] = Um[index_time]:proj(1e-6,150)
+    end
+    for i=1,#L do
+      if i ~= index_time then
+        Us[i] = Us[i]:shift(i-1,"from_forward")
+        Um[i] = Um[i]*Us[i]
+        Um[i] = Um[i]:proj(1e-6,150)
+      end
+    end
+  end
+end 
+     
+--Strictly nonplanar, so this will not compute the planar loops. Use the planar one to do that
+-- Does "half" the "one-kink" ones. For instance, in 2D, 
+--
+--   x ------ x         ^    |------>
+--   |        |         |    |
+--   |        |         |    |
+--   |        |         |    |
+--   x ------ x    ------    |
+--
+function nonplanar_wilson(L,U4,index_time,nx,nt,filename)
+
+    --Then, make copies
+  local xi = {} -- holds the spatial indices
+  local Us = {} -- Holds the copies that get shifted
+  local Um = {} -- Holds the copies that get multiplied
+  for i=1,#L do
+    if i ~= index_time then
+      xi[#xi+1] = i
+    end
+    Us[i] = L:ColorMatrix(U4[i])
+    Um[i] = L:ColorMatrix(U4[i])
+  end
+
+  --Construct ans array
+  local ans = {}
+  for nx1=1,nx do
+    ans[nx1] = {}
+    for nx2=1,nx-nx1 do
+      ans[nx1][nx2] = {}
+      for nt=1,nt do
+        ans[nx1][nx2][nt] = 0
+      end
+    end
+  end
+
+  --Index a first thing  
+  for i=1,#xi do
+    --print("reset",i)
+    Us[xi[i]] = L:ColorMatrix(U4[xi[i]])
+    Um[xi[i]] = L:ColorMatrix(U4[xi[i]])
+    for nx1=1,nx do
+      --Index a second direction
+      for j=1,#xi do
+        if j ~= i then
+          --print("reset",j)
+          Us[xi[j]] = L:ColorMatrix(U4[xi[j]])
+          Um[xi[j]] = L:ColorMatrix(U4[xi[j]])
+          for nx2=1,nx-nx1 do
+            --print("reset","t")
+            Us[index_time] = L:ColorMatrix(U4[index_time])
+            Um[index_time] = L:ColorMatrix(U4[index_time])
+            for nt=1,nt do
+              local Ux1_s   = L:ColorMatrix(Um[xi[i]]) --shifted in time
+              local Ux2_s   = L:ColorMatrix(Um[xi[j]]) --shifted in the 1st direction
+              local Ux2_s_h = L:ColorMatrix(Um[xi[j]]) --shifted in 1st, and time
+              local Ut_s    = L:ColorMatrix(Um[index_time]) --shifted in 1st, and 2nd
+              
+              for i1=1,nx1 do
+                Ux2_s = Ux2_s:shift(xi[i]-1,"from_forward")
+                Ut_s = Ut_s:shift(xi[i]-1,"from_forward")
+                Ux2_s_h = Ux2_s_h:shift(xi[i]-1,"from_forward")
+              end
+              for i2=1,nx2 do
+                Ut_s = Ut_s:shift(xi[j]-1,"from_forward")
+              end
+              for it=1,nt do
+                Ux2_s_h = Ux2_s_h:shift(index_time-1,"from_forward")
+                Ux1_s = Ux1_s:shift(index_time-1,"from_forward")
+              end
+              --print("calculate","indices",i,j,"t","amounts",nx1,nx2,nt)
+              ans[nx1][nx2][nt] = ans[nx1][nx2][nt] + (Um[xi[i]] * 
+                                                       Ux2_s *
+                                                       Ut_s *
+                                                       Ux2_s_h:adjoin() *
+                                                       Ux1_s:adjoin() *
+                                                       Um[index_time]:adjoin()):proj(1e-6,150):trace():sum()/L:volume()
+                                  
+              --print("shift","t")
+              Us[index_time] = Us[index_time]:shift(index_time-1,"from_forward")
+              Um[index_time] = Um[index_time]*Us[index_time]
+              Um[index_time] = Um[index_time]:proj(1e-6,150)
+            end
+            --print("shift",j)
+            Us[xi[j]] = Us[xi[j]]:shift(xi[j]-1,"from_forward")
+            Um[xi[j]] = Um[xi[j]]*Us[xi[j]]
+            Um[xi[j]] = Um[xi[j]]:proj(1e-6,150)
+          end
+        end
+      end
+      --print("shift",i)
+      Us[xi[i]] = Us[xi[i]]:shift(xi[i]-1,"from_forward")
+      Um[xi[i]] = Um[xi[i]]*Us[xi[i]]
+      Um[xi[i]] = Um[xi[i]]:proj(1e-6,150)
+    end
+  end
+  
+
+  --Open file to write to
+  local file = io.open(filename,"w")
+  --print(filename)
+
+  for nx1=1,nx do
+    for nx2=1,nx-nx1 do
+      for nt=1,nt do 
+        file:write("nx1 "..nx1.." nx2 "..nx2.." nt "..nt.." avg "..ans[nx1][nx2][nt]:real()/(#xi*(#xi-1)).." "..ans[nx1][nx2][nt]:imag()/(#xi*(#xi-1)).."\n")
+      end
+    end
+  end
+  
+end
+
+
+
+
+
